@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true ||
+        (request.auth.token.email == 'brasilportalvip@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isSafeProfileUpdate() {
+      // O cliente nunca pode alterar campos financeiros, administrativos ou de segurança
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'credits',
+        'plan',
+        'lastPurchaseAt',
+        'promotionalCreditsBlocked',
+        'fraudReasons',
+        'freeRefillsCount',
+        'lastFreeRefillAt',
+        'creditsGranted',
+        'role',
+        'isAdmin',
+        'admin'
+      ]);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if false; // NUNCA permitir listagem aberta da coleção de usuários
+
+      // Criação de perfil inicial pelo próprio usuário autenticado
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && (!('credits' in request.resource.data) || request.resource.data.credits <= 7)
+        && (!('plan' in request.resource.data) || request.resource.data.plan == 'free');
+
+      // Atualização de dados de perfil pelo usuário (apenas campos permitidos) ou admin
+      allow update: if (isOwner(userId) && isSafeProfileUpdate()) || isAdmin();
+      allow delete: if isOwner(userId) || isAdmin();
+
+      // Subcoleções do usuário
+      match /consultations/{consultationId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false; // Criado e gerenciado exclusivamente via servidor
+      }
+
+      match /credit_logs/{logId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false; // Livro-razão (ledger) exclusivamente manipulado no servidor
+      }
+
+      match /transactions/{transactionId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+    }
+
+    // Coleções administrativas e de segurança do servidor - bloqueadas no cliente
+    match /security_logs/{logId} {
+      allow read, write: if false;
+    }
+
+    match /payment_logs/{paymentId} {
+      allow read, write: if false;
+    }
+
+    match /payment_webhooks/{webhookId} {
+      allow read, write: if false;
+    }
+
+    match /payment_errors/{errorId} {
+      allow read, write: if false;
+    }
+  }
+}

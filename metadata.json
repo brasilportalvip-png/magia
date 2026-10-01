@@ -1,0 +1,8 @@
+{
+  "name": "Magia Das Crenças",
+  "description": "Uma plataforma espiritual e mística ultra avançada com IA, astrologia, tarot e numerologia sob o guia Cigano Pablo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
