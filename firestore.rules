@@ -27,20 +27,38 @@ service cloud.firestore {
       );
     }
 
+    function hasOnlyAllowedProfileKeys(keys) {
+      return keys.hasOnly([
+        'uid',
+        'displayName',
+        'email',
+        'birthDate',
+        'birthTime',
+        'sign',
+        'lifePathNumber',
+        'spiritualElement',
+        'guardianAngel',
+        'regentOdu',
+        'nameNumber',
+        'deviceId',
+        'createdAt',
+        'updatedAt'
+      ]);
+    }
+
     function isSafeProfileUpdate() {
-      // O cliente nunca pode alterar campos financeiros, administrativos ou de segurança
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        'credits',
-        'plan',
-        'lastPurchaseAt',
-        'promotionalCreditsBlocked',
-        'fraudReasons',
-        'freeRefillsCount',
-        'lastFreeRefillAt',
-        'creditsGranted',
-        'role',
-        'isAdmin',
-        'admin'
+      // WHITELIST RIGOROSA: o cliente só pode atualizar campos de perfil espiritual e visual
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        'displayName',
+        'birthDate',
+        'birthTime',
+        'sign',
+        'lifePathNumber',
+        'spiritualElement',
+        'guardianAngel',
+        'regentOdu',
+        'nameNumber',
+        'updatedAt'
       ]);
     }
 
@@ -50,14 +68,23 @@ service cloud.firestore {
       allow list: if false; // NUNCA permitir listagem aberta da coleção de usuários
 
       // Criação de perfil inicial pelo próprio usuário autenticado
+      // O cliente NUNCA pode inicializar credits, plan ou campos de segurança
       allow create: if isOwner(userId)
         && request.resource.data.uid == userId
-        && (!('credits' in request.resource.data) || request.resource.data.credits <= 7)
-        && (!('plan' in request.resource.data) || request.resource.data.plan == 'free');
+        && hasOnlyAllowedProfileKeys(request.resource.data.keys())
+        && !('credits' in request.resource.data)
+        && !('plan' in request.resource.data)
+        && !('promotionalCreditsBlocked' in request.resource.data)
+        && !('fraudReasons' in request.resource.data)
+        && !('role' in request.resource.data)
+        && !('isAdmin' in request.resource.data)
+        && !('admin' in request.resource.data);
 
-      // Atualização de dados de perfil pelo usuário (apenas campos permitidos) ou admin
+      // Atualização estritamente por whitelist
       allow update: if (isOwner(userId) && isSafeProfileUpdate()) || isAdmin();
-      allow delete: if isOwner(userId) || isAdmin();
+      
+      // Exclusão direta pelo cliente proibida: deve passar por /api/account/delete
+      allow delete: if false;
 
       // Subcoleções do usuário
       match /consultations/{consultationId} {
@@ -82,6 +109,14 @@ service cloud.firestore {
     }
 
     match /payment_logs/{paymentId} {
+      allow read, write: if false;
+    }
+
+    match /payment_intents/{intentId} {
+      allow read, write: if false;
+    }
+
+    match /payments/{paymentId} {
       allow read, write: if false;
     }
 

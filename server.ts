@@ -8,6 +8,7 @@ import paymentCreateHandler from "./api/payments/create";
 import paymentWebhookHandler from "./api/payments/webhook";
 import paymentStatusHandler from "./api/payments/status";
 import accountDeleteHandler from "./api/account/delete";
+import accountDeleteHistoryHandler from "./api/account/delete-history";
 import healthHandler from "./api/health";
 
 dotenv.config();
@@ -19,11 +20,19 @@ const app = express();
 // ======================================================
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+
+  const isDev = process.env.NODE_ENV !== "production";
+  const scriptSrc = isDev
+    ? "'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.firebaseapp.com"
+    : "'self' 'unsafe-inline' https://apis.google.com https://*.firebaseapp.com";
+
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors 'self' https://*;"
+    `default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https: blob:; connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com https://*.googleapis.com https://api.mercadopago.com wss:; frame-ancestors 'self' https://*.run.app https://magiadascrencasmax.vercel.app https://www.magiadascrencas.com.br;`
   );
   next();
 });
@@ -45,6 +54,7 @@ app.all("/api/payments/status/:paymentId", (req, res) => {
   return paymentStatusHandler(req, res);
 });
 app.all("/api/account/delete", accountDeleteHandler);
+app.all("/api/account/delete-history", accountDeleteHistoryHandler);
 app.all("/api/health", healthHandler);
 
 // ======================================================

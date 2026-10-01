@@ -4,6 +4,9 @@ import registerCheckHandler from "../api/security/register-check";
 import paymentCreateHandler from "../api/payments/create";
 import paymentStatusHandler from "../api/payments/status";
 
+import accountDeleteHandler from "../api/account/delete";
+import accountDeleteHistoryHandler from "../api/account/delete-history";
+
 function createMockReqRes(options: {
   method?: string;
   headers?: Record<string, string>;
@@ -86,6 +89,24 @@ describe("API Security & Authentication Tests", () => {
     });
 
     await registerCheckHandler(req, res);
+    expect(res.getStatus()).toBe(401);
+  });
+
+  it("rejeita /api/account/delete sem token com HTTP 401", async () => {
+    const { req, res } = createMockReqRes({
+      method: "POST",
+    });
+
+    await accountDeleteHandler(req, res);
+    expect(res.getStatus()).toBe(401);
+  });
+
+  it("rejeita /api/account/delete-history sem token com HTTP 401", async () => {
+    const { req, res } = createMockReqRes({
+      method: "POST",
+    });
+
+    await accountDeleteHistoryHandler(req, res);
     expect(res.getStatus()).toBe(401);
   });
 });

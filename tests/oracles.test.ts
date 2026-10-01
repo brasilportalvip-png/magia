@@ -77,19 +77,19 @@ describe("Ledger & Custos de Consulta", () => {
 });
 
 describe("Rate Limiter", () => {
-  it("permite requisições dentro do limite", () => {
+  it("permite requisições dentro do limite", async () => {
     const id = "test_user_ok_" + Date.now();
-    const res1 = checkRateLimit(id, 5, 1000);
+    const res1 = await checkRateLimit(id, 5, 1000);
     expect(res1.allowed).toBe(true);
     expect(res1.remaining).toBe(4);
   });
 
-  it("bloqueia quando o limite é excedido", () => {
+  it("bloqueia quando o limite é excedido", async () => {
     const id = "test_user_blocked_" + Date.now();
     for (let i = 0; i < 3; i++) {
-      checkRateLimit(id, 3, 1000);
+      await checkRateLimit(id, 3, 1000);
     }
-    const res = checkRateLimit(id, 3, 1000);
+    const res = await checkRateLimit(id, 3, 1000);
     expect(res.allowed).toBe(false);
     expect(res.remaining).toBe(0);
     expect(res.retryAfterSec).toBeDefined();

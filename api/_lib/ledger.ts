@@ -6,12 +6,39 @@ export function calculateConsultationCost(message: string, oracleType?: string):
 
   if (oracle === "tarot" || text.includes("tarot")) return 3;
   if (oracle === "mapa astral" || text.includes("mapa astral")) return 5;
-  if (oracle.includes("búzios") || oracle.includes("buzios") || text.includes("búzios") || text.includes("buzios")) return 4;
-  if (oracle.includes("ifá") || oracle.includes("ifa") || text.includes("ifá") || text.includes("ifa")) return 4;
+  if (
+    oracle.includes("búzios") ||
+    oracle.includes("buzios") ||
+    text.includes("búzios") ||
+    text.includes("buzios")
+  ) {
+    return 4;
+  }
+  if (
+    oracle.includes("ifá") ||
+    oracle.includes("ifa") ||
+    text.includes("ifá") ||
+    text.includes("ifa")
+  ) {
+    return 4;
+  }
   if (oracle === "odu" || text.includes("odu")) return 2;
-  if (oracle.includes("orixá") || oracle.includes("orixa") || text.includes("orixá") || text.includes("orixa")) return 4;
+  if (
+    oracle.includes("orixá") ||
+    oracle.includes("orixa") ||
+    text.includes("orixá") ||
+    text.includes("orixa")
+  ) {
+    return 4;
+  }
   if (oracle === "numerologia" || text.includes("numerologia")) return 2;
-  if (oracle.includes("anjo") || text.includes("anjo guardião") || text.includes("anjo guardiao")) return 2;
+  if (
+    oracle.includes("anjo") ||
+    text.includes("anjo guardião") ||
+    text.includes("anjo guardiao")
+  ) {
+    return 2;
+  }
   if (oracle === "cabala" || text.includes("cabala")) return 2;
   if (oracle.includes("daimon") || text.includes("daimon")) return 2;
   if (
@@ -93,14 +120,16 @@ export async function debitCredits(params: {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // P0-23: Save with status debited
       t.set(logRef, {
         transactionId: idempotencyKey,
         uid,
-        type: "debit",
+        type: "consultation_debit",
         amount,
         balanceBefore: currentCredits,
         balanceAfter: newBalance,
         reason,
+        status: "debited",
         consultationId: consultationId || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -119,6 +148,23 @@ export async function debitCredits(params: {
       success: false,
       error: err?.message || "Falha ao debitar créditos.",
     };
+  }
+}
+
+export async function markDebitCompleted(uid: string, idempotencyKey: string): Promise<void> {
+  try {
+    const db = getDb();
+    const logRef = db
+      .collection("users")
+      .doc(uid)
+      .collection("credit_logs")
+      .doc(idempotencyKey);
+    await logRef.update({
+      status: "completed",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn("[LEDGER_MARK_COMPLETED_WARN]", e);
   }
 }
 
@@ -165,6 +211,7 @@ export async function refundCredits(params: {
         balanceBefore: currentCredits,
         balanceAfter: newBalance,
         reason,
+        status: "refunded",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     });
@@ -172,6 +219,25 @@ export async function refundCredits(params: {
     return true;
   } catch (err) {
     console.error("[REFUND_ERROR]", err);
+    // P0-23: If refund fails, log refund_pending so reconciliation job can recover it
+    try {
+      await logRef.set(
+        {
+          transactionId: refundId,
+          originalTransactionId,
+          uid,
+          type: "refund",
+          amount,
+          reason,
+          status: "refund_pending",
+          error: String(err),
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error("[CRITICAL_REFUND_PENDING_WRITE_FAILED]", e);
+    }
     return false;
   }
 }

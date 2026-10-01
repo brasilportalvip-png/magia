@@ -26,7 +26,10 @@ export default function App() {
     isOpen: false,
     type: "privacy",
   });
-  const [paymentSuccess, setPaymentSuccess] = useState<string | null>(null);
+  const [paymentNotification, setPaymentNotification] = useState<{
+    type: "loading" | "success" | "pending" | "error";
+    message: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<string>("home");
   const [currentAdvice, setCurrentAdvice] = useState<string>(
     "O universo ainda possui mensagens ocultas para você. Busque o saber através das ferramentas sagradas."
@@ -45,11 +48,70 @@ export default function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
 
-    if (urlParams.get("payment") === "success") {
-      const credits = urlParams.get("credits");
-      setPaymentSuccess(credits);
+    const paymentParam = urlParams.get("payment");
+    const refParam = urlParams.get("ref");
+    const paymentIdParam =
+      urlParams.get("payment_id") || urlParams.get("collection_id");
+
+    if (paymentParam) {
       window.history.replaceState({}, document.title, window.location.pathname);
-      setTimeout(() => setPaymentSuccess(null), 10000);
+
+      if (paymentParam === "failure") {
+        setPaymentNotification({
+          type: "error",
+          message:
+            "O pagamento não foi concluído ou foi cancelado no Mercado Pago.",
+        });
+        setTimeout(() => setPaymentNotification(null), 8000);
+      } else {
+        setPaymentNotification({
+          type: "loading",
+          message: "Confirmando status do seu pagamento com o Mercado Pago...",
+        });
+
+        // P1-57: Validate status with authenticated backend
+        (async () => {
+          try {
+            const token = await auth.currentUser?.getIdToken();
+            const query = new URLSearchParams();
+            if (refParam) query.set("ref", refParam);
+            if (paymentIdParam) query.set("paymentId", paymentIdParam);
+
+            const res = await fetch(`/api/payments/status?${query.toString()}`, {
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            });
+
+            const data = await res.json();
+            if (res.ok && data.approved) {
+              setPaymentNotification({
+                type: "success",
+                message:
+                  "Pagamento aprovado com sucesso! Seus créditos espirituais foram liberados.",
+              });
+            } else if (res.ok && data.status === "pending") {
+              setPaymentNotification({
+                type: "pending",
+                message:
+                  "Pagamento em análise pelo Mercado Pago. Seus créditos serão liberados em instantes.",
+              });
+            } else {
+              setPaymentNotification({
+                type: "pending",
+                message:
+                  "Recebemos o retorno do Mercado Pago. O saldo será atualizado assim que compensado.",
+              });
+            }
+          } catch {
+            setPaymentNotification({
+              type: "pending",
+              message: "Processando liberação de créditos...",
+            });
+          }
+          setTimeout(() => setPaymentNotification(null), 10000);
+        })();
+      }
     }
 
     const path = window.location.pathname.toLowerCase();
@@ -393,7 +455,8 @@ export default function App() {
         onClick={() =>
           window.open(
             "https://chat.whatsapp.com/JqXdWPrCVxz1NC9dXyMdso?s=cl&p=a&ilr=2&amv=1",
-            "_blank"
+            "_blank",
+            "noopener,noreferrer"
           )
         }
         className="mb-4 w-full rounded-2xl bg-green-600 py-4 font-bold text-white"
@@ -406,7 +469,8 @@ export default function App() {
         onClick={() =>
           window.open(
             "https://t.me/+EOUhr0Xa2_00NDQ5",
-            "_blank"
+            "_blank",
+            "noopener,noreferrer"
           )
         }
         className="mb-4 w-full rounded-2xl bg-sky-600 py-4 font-bold text-white"
@@ -425,34 +489,31 @@ export default function App() {
   </motion.div>
 )}
 
-
-
-
-
       <AnimatePresence>
-        {paymentSuccess && (
+        {paymentNotification && (
           <motion.div
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-32 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-black px-8 py-4 rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.4)] flex items-center gap-4 border-2 border-emerald-400/50 backdrop-blur-xl"
+            className={`fixed bottom-32 left-1/2 -translate-x-1/2 z-[100] px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-4 border-2 backdrop-blur-xl max-w-md text-xs font-bold ${
+              paymentNotification.type === "success"
+                ? "bg-emerald-500 text-black border-emerald-400/50"
+                : paymentNotification.type === "error"
+                ? "bg-rose-900 text-white border-rose-500/50"
+                : "bg-amber-500 text-black border-amber-400/50"
+            }`}
           >
-            <div className="w-12 h-12 bg-black/20 rounded-2xl flex items-center justify-center">
-              <Zap size={24} fill="currentColor" />
+            <div className="w-10 h-10 bg-black/20 rounded-2xl flex items-center justify-center shrink-0">
+              <Zap size={20} fill="currentColor" />
             </div>
 
-            <div>
-              <h4 className="font-black uppercase tracking-widest text-sm">
-                Energia Restaurada!
-              </h4>
-              <p className="text-[10px] font-bold opacity-80">
-                Você recebeu {paymentSuccess} créditos de Energia Vital.
-              </p>
+            <div className="flex-1">
+              <p>{paymentNotification.message}</p>
             </div>
 
             <button
-              onClick={() => setPaymentSuccess(null)}
-              className="ml-4 p-2 hover:bg-black/10 rounded-xl transition-colors"
+              onClick={() => setPaymentNotification(null)}
+              className="p-1 hover:bg-black/10 rounded-xl transition-colors"
             >
               <X size={18} />
             </button>
